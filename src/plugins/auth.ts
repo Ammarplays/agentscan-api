@@ -14,6 +14,7 @@ declare module 'fastify' {
 export async function authPlugin(fastify: FastifyInstance) {
   fastify.decorateRequest('apiKey', undefined);
   fastify.decorateRequest('deviceId', undefined);
+  fastify.decorateRequest('user', undefined);
 }
 
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {

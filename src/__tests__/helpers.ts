@@ -22,11 +22,22 @@ export async function closeApp(): Promise<void> {
 }
 
 export async function cleanDb(): Promise<void> {
-  await db.execute(sql`TRUNCATE TABLE scan_results, scan_requests, devices, api_keys CASCADE`);
+  await db.execute(sql`TRUNCATE TABLE scan_results, scan_requests, pairing_sessions, devices, api_keys, users CASCADE`);
 }
 
 export async function ensureTables(): Promise<void> {
   // Create tables if they don't exist
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT NOT NULL UNIQUE,
+      name TEXT,
+      picture TEXT,
+      google_id TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_login_at TIMESTAMPTZ
+    )
+  `);
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS api_keys (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -34,6 +45,7 @@ export async function ensureTables(): Promise<void> {
       key_hash TEXT NOT NULL UNIQUE,
       key_prefix TEXT NOT NULL,
       owner_email TEXT NOT NULL,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_used_at TIMESTAMPTZ,
       is_active BOOLEAN NOT NULL DEFAULT TRUE
@@ -76,6 +88,19 @@ export async function ensureTables(): Promise<void> {
       picked_up BOOLEAN NOT NULL DEFAULT FALSE,
       picked_up_at TIMESTAMPTZ,
       auto_delete_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS pairing_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      api_key_id UUID NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      short_code TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT FALSE,
+      device_id UUID REFERENCES devices(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 }

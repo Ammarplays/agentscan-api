@@ -9,6 +9,9 @@ import { devicesRoutes } from './routes/devices.js';
 import { requestsRoutes } from './routes/requests.js';
 import { resultsRoutes } from './routes/results.js';
 import { deviceApiRoutes } from './routes/device-api.js';
+import { authRoutes } from './routes/auth.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { pairingRoutes } from './routes/pairing.js';
 
 export async function buildApp(opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({ logger: opts.logger ?? false });
@@ -46,6 +49,9 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
   await fastify.register(requestsRoutes);
   await fastify.register(resultsRoutes);
   await fastify.register(deviceApiRoutes);
+  await fastify.register(authRoutes);
+  await fastify.register(dashboardRoutes);
+  await fastify.register(pairingRoutes);
 
   return fastify;
 }
