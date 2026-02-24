@@ -4,12 +4,12 @@ info:
   version: 1.0.0
   description: Document request broker that lets AI agents request physical document scans from users via their iOS app.
   contact:
-    email: support@agentscan.app
+    email: support@agents-can.com
 
 servers:
   - url: http://localhost:3000
     description: Local development
-  - url: https://api.agentscan.app
+  - url: https://api.agents-can.com
     description: Production
 
 security:
