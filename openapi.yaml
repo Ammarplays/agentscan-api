@@ -1,0 +1,387 @@
+openapi: 3.1.0
+info:
+  title: AgentsCan Cloud API
+  version: 1.0.0
+  description: Document request broker that lets AI agents request physical document scans from users via their iOS app.
+  contact:
+    email: support@agentscan.app
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://api.agentscan.app
+    description: Production
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key (sk_live_...)
+
+  schemas:
+    Error:
+      type: object
+      required: [error, code, status]
+      properties:
+        error: { type: string }
+        code: { type: string }
+        status: { type: integer }
+
+    ApiKeyCreate:
+      type: object
+      required: [name, owner_email]
+      properties:
+        name: { type: string }
+        owner_email: { type: string, format: email }
+
+    ApiKeyResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        key: { type: string, description: "Only returned on creation" }
+        key_prefix: { type: string }
+        owner_email: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        is_active: { type: boolean }
+
+    DevicePair:
+      type: object
+      required: [device_token, device_name, platform]
+      properties:
+        device_token: { type: string }
+        device_name: { type: string }
+        platform: { type: string, enum: [ios, android] }
+
+    DeviceResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        device_name: { type: string }
+        platform: { type: string }
+        paired_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+
+    ScanRequestCreate:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        device_id: { type: string, format: uuid }
+        webhook_url: { type: string, format: uri }
+        webhook_secret: { type: string }
+        expires_in: { type: integer, minimum: 60, maximum: 86400, default: 3600 }
+
+    ScanRequestResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        device_id: { type: string, format: uuid, nullable: true }
+        message: { type: string }
+        status: { type: string, enum: [pending, scanning, completed, expired, cancelled] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    ScanResultResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        request_id: { type: string, format: uuid }
+        pdf_url: { type: string, format: uri }
+        text_url: { type: string, format: uri }
+        pdf_size_bytes: { type: integer }
+        page_count: { type: integer }
+        ocr_text_preview: { type: string }
+        created_at: { type: string, format: date-time }
+        picked_up: { type: boolean }
+        auto_delete_at: { type: string, format: date-time }
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  version: { type: string }
+
+  /api/v1/keys:
+    post:
+      summary: Create API key
+      tags: [API Keys]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApiKeyCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiKeyResponse' }
+    get:
+      summary: List API keys
+      tags: [API Keys]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApiKeyResponse' }
+
+  /api/v1/keys/{id}:
+    delete:
+      summary: Revoke API key
+      tags: [API Keys]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Revoked
+
+  /api/v1/devices/pair:
+    post:
+      summary: Pair a device
+      tags: [Devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DevicePair' }
+      responses:
+        '201':
+          description: Paired
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceResponse' }
+
+  /api/v1/devices:
+    get:
+      summary: List paired devices
+      tags: [Devices]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DeviceResponse' }
+
+  /api/v1/devices/{id}:
+    delete:
+      summary: Unpair device
+      tags: [Devices]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Unpaired
+
+  /api/v1/requests:
+    post:
+      summary: Create scan request
+      tags: [Scan Requests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScanRequestCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanRequestResponse' }
+    get:
+      summary: List scan requests
+      tags: [Scan Requests]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, scanning, completed, expired, cancelled] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScanRequestResponse' }
+
+  /api/v1/requests/{id}:
+    get:
+      summary: Get request status
+      tags: [Scan Requests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanRequestResponse' }
+    delete:
+      summary: Cancel request
+      tags: [Scan Requests]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Cancelled
+
+  /api/v1/requests/{id}/result:
+    get:
+      summary: Get scan result metadata
+      tags: [Scan Results]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanResultResponse' }
+
+  /api/v1/requests/{id}/pdf:
+    get:
+      summary: Download scanned PDF
+      tags: [Scan Results]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: PDF file
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+
+  /api/v1/requests/{id}/text:
+    get:
+      summary: Get OCR text
+      tags: [Scan Results]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Plain text
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /api/v1/device/requests:
+    get:
+      summary: Get pending requests for device
+      tags: [Device API]
+      parameters:
+        - name: X-Device-Id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ScanRequestResponse' }
+
+  /api/v1/device/requests/{id}/accept:
+    post:
+      summary: Accept scan request
+      tags: [Device API]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Device-Id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Accepted
+
+  /api/v1/device/requests/{id}/complete:
+    post:
+      summary: Upload scan result
+      tags: [Device API]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Device-Id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                ocr_text: { type: string }
+                page_count: { type: integer }
+      responses:
+        '201':
+          description: Completed
+
+  /api/v1/device/requests/{id}/reject:
+    post:
+      summary: Reject scan request
+      tags: [Device API]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: X-Device-Id
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Rejected
